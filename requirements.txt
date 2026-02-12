@@ -1,0 +1,9 @@
+streamlit
+openai-whisper
+opencv-python
+requests
+python-dotenv
+Pillow
+numpy<2
+fpdf2
+yt-dlp
