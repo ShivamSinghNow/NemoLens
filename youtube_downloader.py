@@ -114,12 +114,24 @@ def download_youtube_video(
     output_template = os.path.join(tmp_dir, "video.%(ext)s")
 
     try:
+        # Format string explanation:
+        #   1. Best mp4 video (up to preferred_height) + best audio (any format)
+        #   2. Best video (any ext, up to height) + best audio → merge to mp4
+        #   3. Best single-file stream that has both video+audio
+        # The key fix: don't restrict bestaudio to [ext=m4a] — many YT videos
+        # only offer opus/webm audio.  yt-dlp + ffmpeg will transcode as needed.
+        fmt = (
+            f"bestvideo[height<={preferred_height}][ext=mp4]+bestaudio/best"
+            f"video[height<={preferred_height}]+bestaudio/"
+            f"best[height<={preferred_height}]/best"
+        )
         cmd = [
             "yt-dlp",
             "--no-playlist",
-            # Pick best mp4 up to preferred_height
-            "-f", f"bestvideo[height<={preferred_height}][ext=mp4]+bestaudio[ext=m4a]/best[height<={preferred_height}][ext=mp4]/best[ext=mp4]/best",
+            "-f", fmt,
             "--merge-output-format", "mp4",
+            # Ensure ffmpeg embeds audio even when transcoding is needed
+            "--postprocessor-args", "ffmpeg:-c:a aac -b:a 128k",
             "-o", output_template,
             url,
         ]

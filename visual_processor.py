@@ -9,8 +9,9 @@ from transcription import get_transcript_for_range
 from nemotron_client import describe_segments_parallel
 
 SEGMENT_DURATION = 120  # 2 minutes per segment
-FRAMES_PER_SEGMENT = 5  # NVIDIA Build allows max 5 images per request
-MAX_PX = 512
+FRAMES_PER_SEGMENT = 3  # fewer frames = faster API calls (max 5 allowed)
+MAX_PX = 384  # smaller frames = smaller payload, still enough detail
+JPEG_QUALITY = 60  # lower quality = smaller base64 strings
 
 
 def extract_segment_frames(
@@ -71,7 +72,7 @@ def extract_segment_frames(
                 if scale < 1.0:
                     frame = cv2.resize(frame, (int(w * scale), int(h * scale)))
 
-                _, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 75])
+                _, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY])
                 frames_b64.append(base64.b64encode(buf).decode("utf-8"))
 
             segments.append({

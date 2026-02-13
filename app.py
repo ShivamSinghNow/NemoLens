@@ -2,7 +2,20 @@
 
 import re
 import io
+import types
+import hashlib
+import base64
 import datetime
+
+# ── PyTorch / Streamlit compatibility patch ──────────────────────────────────
+# Streamlit's file watcher inspects every imported module's __path__._path to
+# discover source files.  PyTorch's `torch.classes` uses a custom __getattr__
+# that tries to look up *any* attribute as a C++ registered class, so accessing
+# __path__._path raises a RuntimeError.  The patch below gives torch.classes a
+# normal __path__ object so Streamlit's watcher skips it silently.
+import torch.classes as _torch_classes  # noqa: E402
+_torch_classes.__path__ = types.SimpleNamespace(_path=[])
+
 import streamlit as st
 from dotenv import load_dotenv
 from fpdf import FPDF
@@ -26,6 +39,8 @@ from intelligence import (
 )
 from nemotron_client import chat_with_context
 from youtube_downloader import is_youtube_url, download_youtube_video, get_video_info
+from voice_assistant import transcribe_audio, answer_question
+from components.floating_mic import floating_mic
 
 load_dotenv()
 
@@ -180,6 +195,25 @@ st.markdown("""
         font-weight: 700;
         letter-spacing: 0.5px;
     }
+
+    /* ── Voice assistant ──────────────────────────────────────────── */
+    .nemo-response {
+        padding: 1rem;
+        border-left: 3px solid #76b900;
+        background: rgba(118, 185, 0, 0.05);
+        border-radius: 0 8px 8px 0;
+        margin: 0.5rem 0;
+    }
+    .nemo-label {
+        color: #76b900;
+        font-weight: 700;
+        font-size: 0.9rem;
+        margin-bottom: 0.25rem;
+    }
+    .voice-history-q {
+        font-weight: 600;
+        margin-bottom: 0.15rem;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -200,6 +234,7 @@ DEFAULTS = {
     "quiz_results": {},
     "full_context": None,
     "chat_history": [],
+    "voice_history": [],
     "processing_done": False,
     "video_start_time": 0,
 }
@@ -662,6 +697,44 @@ def reset_state():
     """Reset all session state to defaults."""
     for key, val in DEFAULTS.items():
         st.session_state[key] = val
+    # Clear voice-assistant internal tracking state
+    for key in ("_voice_audio_hash", "_voice_question", "_voice_answer", "_voice_response_id"):
+        st.session_state.pop(key, None)
+
+
+def _build_voice_context() -> dict:
+    """Assemble video analysis data into a dict for the voice assistant."""
+    transcript_text = ""
+    if st.session_state.transcript:
+        transcript_text = format_transcript_with_timestamps(
+            st.session_state.transcript["segments"]
+        )
+
+    chapters_text = ""
+    if st.session_state.chapters:
+        chapters_text = "\n".join(
+            f"[{_fmt(ch['time'])}] {ch['title']}: {ch.get('summary', '')}"
+            for ch in st.session_state.chapters
+        )
+
+    takeaways_text = ""
+    if st.session_state.takeaways:
+        takeaways_text = "\n".join(f"- {tw}" for tw in st.session_state.takeaways)
+
+    visual_text = ""
+    if st.session_state.analyzed_segments:
+        visual_text = "\n".join(
+            f"[{_fmt(seg['start_time'])} - {_fmt(seg['end_time'])}] "
+            f"{seg.get('visual_description', '')}"
+            for seg in st.session_state.analyzed_segments
+        )
+
+    return {
+        "transcript": transcript_text,
+        "chapters": chapters_text,
+        "takeaways": takeaways_text,
+        "visual_descriptions": visual_text,
+    }
 
 
 # ── Sidebar ──────────────────────────────────────────────────────────────────
@@ -954,6 +1027,8 @@ if has_video:
     # ── Results UI ───────────────────────────────────────────────────────
 
     if st.session_state.processing_done:
+
+        # ── Analysis Tabs ─────────────────────────────────────────────────
 
         tab_overview, tab_study, tab_quiz, tab_transcript, tab_search, tab_chat = st.tabs(
             ["📊 Overview", "📖 Study Guide", "❓ Practice Quiz",
@@ -1471,3 +1546,61 @@ else:
     st.info(
         "👆 Upload a video file or paste a YouTube URL above to get started."
     )
+
+
+# ── Floating Voice Assistant (Nemo) ──────────────────────────────────────────
+# A draggable mic FAB that hovers over the page.  Tap to record a question;
+# the answer appears in a floating panel with TTS.
+
+if st.session_state.processing_done:
+    audio_b64 = floating_mic(
+        response=st.session_state.get("_voice_answer", ""),
+        question=st.session_state.get("_voice_question", ""),
+        response_id=st.session_state.get("_voice_response_id", ""),
+        key="nemo_floating_mic",
+    )
+
+    # Process new audio when the component sends recorded data
+    if audio_b64:
+        audio_hash = hashlib.md5(
+            audio_b64.encode() if isinstance(audio_b64, str) else audio_b64
+        ).hexdigest()
+
+        if st.session_state.get("_voice_audio_hash") != audio_hash:
+            st.session_state["_voice_audio_hash"] = audio_hash
+
+            try:
+                audio_bytes = base64.b64decode(audio_b64)
+                question_text = transcribe_audio(
+                    audio_bytes, model_name=whisper_model
+                )
+            except Exception as e:
+                question_text = ""
+                st.toast(f"Transcription failed: {e}", icon="⚠️")
+
+            if question_text.strip():
+                st.session_state["_voice_question"] = question_text
+                try:
+                    ctx = _build_voice_context()
+                    answer_text = answer_question(question_text, ctx)
+                except Exception as e:
+                    answer_text = (
+                        "Sorry, I couldn't process that right now. "
+                        f"Error: {e}"
+                    )
+                st.session_state["_voice_answer"] = answer_text
+                st.session_state["_voice_response_id"] = hashlib.md5(
+                    answer_text.encode()
+                ).hexdigest()
+                st.session_state.voice_history.append(
+                    {"question": question_text, "answer": answer_text}
+                )
+            else:
+                st.session_state["_voice_question"] = ""
+                st.session_state["_voice_answer"] = ""
+                st.toast(
+                    "Couldn't catch that — please try recording again.",
+                    icon="🔇",
+                )
+
+            st.rerun()

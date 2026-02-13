@@ -2,14 +2,19 @@
 
 import os
 import time
+import logging
 import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+log = logging.getLogger(__name__)
 
 NVIDIA_API_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
 MODEL = "nvidia/nemotron-nano-12b-v2-vl"
 MAX_IMAGES_PER_REQUEST = 5
 MAX_WORKERS = 3  # parallel API calls
-RETRY_DELAY = 2  # seconds between retries on rate limit
+REQUEST_TIMEOUT = 300  # seconds — vision requests with 5 images can be slow
+MAX_RETRIES = 3
+BASE_RETRY_DELAY = 3  # seconds; grows exponentially per attempt
 
 
 def _get_key(api_key: str | None = None) -> str:
@@ -24,24 +29,46 @@ def _headers(api_key: str) -> dict:
     }
 
 
-def _post(payload: dict, api_key: str, retries: int = 2) -> dict:
-    """POST to NVIDIA Build with simple retry on 429."""
+def _post(payload: dict, api_key: str, retries: int = MAX_RETRIES) -> dict:
+    """POST to NVIDIA Build with retry on 429, timeouts, and connection errors."""
+    last_err: Exception | None = None
     for attempt in range(retries + 1):
-        resp = requests.post(
-            NVIDIA_API_URL,
-            headers=_headers(api_key),
-            json=payload,
-            timeout=180,
-        )
-        if resp.status_code == 429 and attempt < retries:
-            time.sleep(RETRY_DELAY * (attempt + 1))
-            continue
-        resp.raise_for_status()
-        data = resp.json()
-        if "error" in data:
-            raise RuntimeError(data["error"].get("message", str(data["error"])))
-        return data
-    raise RuntimeError("Rate limit exceeded after retries.")
+        try:
+            resp = requests.post(
+                NVIDIA_API_URL,
+                headers=_headers(api_key),
+                json=payload,
+                timeout=REQUEST_TIMEOUT,
+            )
+            if resp.status_code == 429 and attempt < retries:
+                delay = BASE_RETRY_DELAY * (2 ** attempt)
+                log.warning("Rate limited (429), retrying in %ds…", delay)
+                time.sleep(delay)
+                continue
+            resp.raise_for_status()
+            data = resp.json()
+            if "error" in data:
+                raise RuntimeError(
+                    data["error"].get("message", str(data["error"]))
+                )
+            return data
+        except (requests.exceptions.Timeout,
+                requests.exceptions.ConnectionError) as exc:
+            last_err = exc
+            if attempt < retries:
+                delay = BASE_RETRY_DELAY * (2 ** attempt)
+                log.warning(
+                    "%s on attempt %d/%d, retrying in %ds…",
+                    type(exc).__name__, attempt + 1, retries + 1, delay,
+                )
+                time.sleep(delay)
+                continue
+            raise RuntimeError(
+                f"NVIDIA API request failed after {retries + 1} attempts: {exc}"
+            ) from exc
+    raise RuntimeError(
+        f"NVIDIA API request failed after {retries + 1} attempts: {last_err}"
+    )
 
 
 # ── Vision requests ──────────────────────────────────────────────────────────
@@ -127,8 +154,25 @@ def describe_segments_parallel(
             for i, seg in enumerate(segments)
         }
         for future in as_completed(futures):
-            idx, description = future.result()
+            idx = futures[future]
             seg = segments[idx]
+            try:
+                _, description = future.result()
+            except Exception as exc:
+                # Graceful degradation: use the transcript as a fallback
+                # description so one failed segment doesn't kill the
+                # entire analysis pipeline.
+                log.warning(
+                    "Segment %d (%s–%s) failed: %s — using transcript fallback",
+                    idx, _fmt(seg["start_time"]), _fmt(seg["end_time"]), exc,
+                )
+                transcript = seg.get("transcript_chunk", "")
+                description = (
+                    f"[Visual analysis unavailable for this segment] "
+                    f"{transcript}"
+                ) if transcript else (
+                    "[Visual analysis unavailable for this segment]"
+                )
             results[idx] = {
                 "start_time": seg["start_time"],
                 "end_time": seg["end_time"],
