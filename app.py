@@ -1,4 +1,4 @@
-"""Video Intelligence Studio — Powered by NVIDIA Nemotron."""
+"""NemoLens — Powered by NVIDIA Nemotron."""
 
 import re
 import io
@@ -47,7 +47,7 @@ load_dotenv()
 # ── Page config ──────────────────────────────────────────────────────────────
 
 st.set_page_config(
-    page_title="Video Intelligence Studio",
+    page_title="NemoLens",
     page_icon="🎬",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -341,7 +341,7 @@ def _build_export_pdf() -> bytes:
                 return
             self.set_font("Helvetica", "B", 9)
             self.set_text_color(*GREEN)
-            self.cell(0, 7, "Video Intelligence Studio  |  Study Guide",
+            self.cell(0, 7, "NemoLens  |  Study Guide",
                       align="L", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             self.set_draw_color(*GREEN)
             self.set_line_width(0.3)
@@ -354,7 +354,7 @@ def _build_export_pdf() -> bytes:
             self.set_text_color(160, 160, 160)
             self.cell(
                 0, 10,
-                "Video Intelligence Studio  --  "
+                "NemoLens  --  "
                 f"Powered by NVIDIA Nemotron  |  Page {self.page_no()}/{{nb}}",
                 align="C",
             )
@@ -403,7 +403,7 @@ def _build_export_pdf() -> bytes:
     pdf.set_y(42)
     pdf.set_font("Helvetica", "B", 28)
     pdf.set_text_color(255, 255, 255)
-    pdf.cell(0, 14, "Video Intelligence Studio",
+    pdf.cell(0, 14, "NemoLens",
              align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
     pdf.set_font("Helvetica", "", 14)
@@ -431,7 +431,7 @@ def _build_export_pdf() -> bytes:
     pdf.set_text_color(*LIGHT_TEXT)
     pdf.cell(0, 6, f"Generated:  {analyzed_at}",
              align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-    pdf.cell(0, 6, "Powered by NVIDIA Nemotron via NVIDIA Build",
+    pdf.cell(0, 6, "Powered by NVIDIA Nemotron Nano 12B",
              align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
     # Contents preview
@@ -740,7 +740,7 @@ def _build_voice_context() -> dict:
 # ── Sidebar ──────────────────────────────────────────────────────────────────
 
 with st.sidebar:
-    st.markdown("### ⚡ NVIDIA Nemotron")
+    st.markdown("### ⚡ NemoLens")
     st.caption("Vision-Language Model via NVIDIA Build")
     st.divider()
 
@@ -796,7 +796,7 @@ with st.sidebar:
     st.markdown("---")
     st.markdown(
         '<div style="text-align:center; padding:0.5rem 0;">'
-        '<span class="nvidia-badge">⚡ Powered by NVIDIA Nemotron</span>'
+        '<span class="nvidia-badge">⚡ Powered by NVIDIA Nemotron Nano 12B</span>'
         "</div>",
         unsafe_allow_html=True,
     )
@@ -806,9 +806,8 @@ with st.sidebar:
 
 st.markdown(
     '<div class="nvidia-header">'
-    "<h1>🎬 Video Intelligence Studio</h1>"
-    "<p>Powered by NVIDIA Nemotron Nano 12B via NVIDIA Build &bull; "
-    "Local Whisper Transcription &bull; Clickable Timestamps &bull; AI Q&amp;A</p>"
+    "<h1>🎬 NemoLens</h1>"
+    "<p>Powered by NVIDIA Nemotron Nano 12B</p>"
     "</div>",
     unsafe_allow_html=True,
 )

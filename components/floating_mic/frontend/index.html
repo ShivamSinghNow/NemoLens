@@ -9,9 +9,9 @@
 (function () {
   "use strict";
 
-  /* ═══════════════════════════════════════════════════════════════
-   *  Streamlit Component Protocol
-   * ═══════════════════════════════════════════════════════════════ */
+  /* ═══════════════════════════════════════════════════════════════════
+   *  1.  Streamlit Component Protocol
+   * ═══════════════════════════════════════════════════════════════════ */
 
   function _send(type, payload) {
     window.parent.postMessage(
@@ -23,141 +23,140 @@
   _send("componentReady", { apiVersion: 1 });
   _send("setFrameHeight", { height: 0 });
 
-  /* ═══════════════════════════════════════════════════════════════
-   *  Parent document & storage
-   * ═══════════════════════════════════════════════════════════════ */
+  /* ═══════════════════════════════════════════════════════════════════
+   *  2.  Parent Document & Globals
+   * ═══════════════════════════════════════════════════════════════════ */
 
   var P   = window.parent.document;
   var LS  = window.parent.localStorage;
   var WIN = window.parent;
 
-  // Remove any previous instances (handles Streamlit re-renders)
   ["nemo-mic", "nemo-panel", "nemo-styles"].forEach(function (id) {
-    var el = P.getElementById(id);
-    if (el) el.remove();
+    var el = P.getElementById(id); if (el) el.remove();
   });
 
-  /* ═══════════════════════════════════════════════════════════════
-   *  CSS  (injected into the parent document)
-   * ═══════════════════════════════════════════════════════════════ */
+  /* ═══════════════════════════════════════════════════════════════════
+   *  3.  CSS
+   * ═══════════════════════════════════════════════════════════════════ */
 
   var css = P.createElement("style");
   css.id = "nemo-styles";
   css.textContent = [
-    /* ── Floating mic button ─────────────────────────────── */
+
+    /* ── Floating mic button ──────────────────────────────────── */
     "#nemo-mic {",
-    "  position: fixed;",
-    "  bottom: 32px; right: 32px;",
-    "  width: 62px; height: 62px;",
-    "  border-radius: 50%;",
-    "  background: linear-gradient(135deg, #76b900 0%, #5a8f00 100%);",
-    "  color: #fff; border: none; cursor: grab;",
-    "  z-index: 999999;",
-    "  display: flex; align-items: center; justify-content: center;",
-    "  box-shadow: 0 4px 18px rgba(118,185,0,.35), 0 2px 4px rgba(0,0,0,.12);",
-    "  transition: transform .2s ease, box-shadow .2s ease, background .3s ease;",
-    "  touch-action: none; user-select: none; -webkit-user-select: none; outline: none;",
+    "  position:fixed; bottom:32px; right:32px;",
+    "  width:62px; height:62px; border-radius:50%;",
+    "  background:linear-gradient(135deg,#76b900 0%,#5a8f00 100%);",
+    "  color:#fff; border:none; cursor:pointer;",
+    "  z-index:999999;",
+    "  display:flex; align-items:center; justify-content:center;",
+    "  box-shadow:0 4px 18px rgba(118,185,0,.35),0 2px 4px rgba(0,0,0,.12);",
+    "  transition:transform .2s ease,box-shadow .2s ease,background .3s ease;",
+    "  touch-action:none; user-select:none; -webkit-user-select:none; outline:none;",
     "}",
     "#nemo-mic:hover {",
-    "  transform: scale(1.08);",
-    "  box-shadow: 0 6px 28px rgba(118,185,0,.5), 0 3px 8px rgba(0,0,0,.15);",
+    "  transform:scale(1.08);",
+    "  box-shadow:0 6px 28px rgba(118,185,0,.5),0 3px 8px rgba(0,0,0,.15);",
     "}",
-    "#nemo-mic:active { cursor: grabbing; }",
+
+    /* recording state */
     "#nemo-mic.recording {",
-    "  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);",
-    "  animation: nemo-rec-pulse 1.4s ease-in-out infinite;",
+    "  background:linear-gradient(135deg,#ef4444 0%,#dc2626 100%);",
+    "  animation:nemo-rec-pulse 1.4s ease-in-out infinite;",
     "}",
-    "#nemo-mic .mic-icon  { display: block; }",
-    "#nemo-mic .stop-icon { display: none; }",
-    "#nemo-mic.recording .mic-icon  { display: none; }",
-    "#nemo-mic.recording .stop-icon { display: block; }",
-
     "@keyframes nemo-rec-pulse {",
-    "  0%,100% { box-shadow: 0 4px 18px rgba(239,68,68,.35), 0 0 0 0 rgba(239,68,68,.45); }",
-    "  50%     { box-shadow: 0 4px 18px rgba(239,68,68,.35), 0 0 0 14px rgba(239,68,68,0); }",
+    "  0%,100%{box-shadow:0 4px 18px rgba(239,68,68,.35),0 0 0 0 rgba(239,68,68,.45)}",
+    "  50%    {box-shadow:0 4px 18px rgba(239,68,68,.35),0 0 0 14px rgba(239,68,68,0)}",
     "}",
 
-    /* ── Response panel ──────────────────────────────────── */
+    /* dragging state — suppress hover scale and transition */
+    "#nemo-mic.dragging {",
+    "  cursor:grabbing !important;",
+    "  transition:none !important;",
+    "  transform:scale(1.04) !important;",
+    "  opacity:.92;",
+    "}",
+
+    /* icon swaps */
+    "#nemo-mic .mic-icon  { display:block }",
+    "#nemo-mic .stop-icon { display:none }",
+    "#nemo-mic.recording .mic-icon  { display:none }",
+    "#nemo-mic.recording .stop-icon { display:block }",
+
+    /* ── Response panel ───────────────────────────────────────── */
     "#nemo-panel {",
-    "  position: fixed;",
-    "  width: 370px; max-height: 420px;",
-    "  background: #1a1a2e;",
-    "  border: 1px solid rgba(118,185,0,.25);",
-    "  border-radius: 16px;",
-    "  z-index: 999998;",
-    "  box-shadow: 0 12px 44px rgba(0,0,0,.35), 0 0 0 1px rgba(255,255,255,.04);",
-    "  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;",
-    "  overflow: hidden;",
-    "  opacity: 0; transform: translateY(8px) scale(.96);",
-    "  pointer-events: none;",
-    "  transition: opacity .25s ease, transform .25s ease;",
+    "  position:fixed; width:370px; max-height:420px;",
+    "  background:#1a1a2e;",
+    "  border:1px solid rgba(118,185,0,.25); border-radius:16px;",
+    "  z-index:999998;",
+    "  box-shadow:0 12px 44px rgba(0,0,0,.35),0 0 0 1px rgba(255,255,255,.04);",
+    "  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;",
+    "  overflow:hidden;",
+    "  opacity:0; transform:translateY(8px) scale(.96);",
+    "  pointer-events:none;",
+    "  transition:opacity .25s ease,transform .25s ease;",
     "}",
     "#nemo-panel.visible {",
-    "  opacity: 1; transform: translateY(0) scale(1); pointer-events: auto;",
+    "  opacity:1; transform:translateY(0) scale(1); pointer-events:auto;",
     "}",
 
     /* header */
     ".nemo-hdr {",
-    "  display: flex; align-items: center; justify-content: space-between;",
-    "  padding: 11px 16px;",
-    "  border-bottom: 1px solid rgba(255,255,255,.06);",
-    "  background: rgba(118,185,0,.08);",
+    "  display:flex; align-items:center; justify-content:space-between;",
+    "  padding:11px 16px;",
+    "  border-bottom:1px solid rgba(255,255,255,.06);",
+    "  background:rgba(118,185,0,.08);",
     "}",
-    ".nemo-hdr-title {",
-    "  color: #76b900; font-weight: 700; font-size: 14px;",
-    "  display: flex; align-items: center; gap: 6px;",
-    "}",
+    ".nemo-hdr-title { color:#76b900; font-weight:700; font-size:14px; display:flex; align-items:center; gap:6px }",
     ".nemo-hdr-close {",
-    "  background: none; border: none; color: rgba(255,255,255,.4);",
-    "  cursor: pointer; font-size: 18px; padding: 4px; line-height: 1;",
-    "  border-radius: 4px; transition: color .2s, background .2s;",
+    "  background:none; border:none; color:rgba(255,255,255,.4);",
+    "  cursor:pointer; font-size:18px; padding:4px; line-height:1;",
+    "  border-radius:4px; transition:color .2s,background .2s;",
     "}",
-    ".nemo-hdr-close:hover { color: #fff; background: rgba(255,255,255,.1); }",
+    ".nemo-hdr-close:hover { color:#fff; background:rgba(255,255,255,.1) }",
 
     /* body */
     ".nemo-body {",
-    "  padding: 16px; overflow-y: auto; max-height: 340px;",
-    "  color: rgba(255,255,255,.85); font-size: 14px; line-height: 1.6;",
+    "  padding:16px; overflow-y:auto; max-height:340px;",
+    "  color:rgba(255,255,255,.85); font-size:14px; line-height:1.6;",
     "}",
-    ".nemo-body .nemo-q-label { color: rgba(255,255,255,.45); font-size: 12px; margin-bottom: 2px; }",
-    ".nemo-body .nemo-question { font-weight: 600; margin-bottom: 14px; color: #fff; }",
-    ".nemo-body .nemo-a-label { color: #76b900; font-weight: 700; font-size: 12px; margin-bottom: 4px; }",
-    ".nemo-body .nemo-answer  { border-left: 2px solid #76b900; padding-left: 12px; }",
+    ".nemo-body .nemo-q-label  { color:rgba(255,255,255,.45); font-size:12px; margin-bottom:2px }",
+    ".nemo-body .nemo-question  { font-weight:600; margin-bottom:14px; color:#fff }",
+    ".nemo-body .nemo-a-label   { color:#76b900; font-weight:700; font-size:12px; margin-bottom:4px }",
+    ".nemo-body .nemo-answer    { border-left:2px solid #76b900; padding-left:12px }",
 
-    /* status row (listening / processing) */
+    /* status row */
     ".nemo-status {",
-    "  color: rgba(255,255,255,.5); font-style: italic;",
-    "  display: flex; align-items: center; gap: 8px;",
+    "  color:rgba(255,255,255,.5); font-style:italic;",
+    "  display:flex; align-items:center; gap:8px;",
     "}",
-    ".nemo-dot {",
-    "  width: 8px; height: 8px; border-radius: 50%;",
-    "  animation: nemo-dot-blink 1.3s ease-in-out infinite;",
-    "}",
-    ".nemo-dot.green { background: #76b900; }",
-    ".nemo-dot.red   { background: #ef4444; }",
+    ".nemo-dot { width:8px; height:8px; border-radius:50%; animation:nemo-dot-blink 1.3s ease-in-out infinite }",
+    ".nemo-dot.green { background:#76b900 }",
+    ".nemo-dot.red   { background:#ef4444 }",
     "@keyframes nemo-dot-blink { 0%,100%{opacity:1} 50%{opacity:.25} }",
 
-    /* timestamp badges inside answer */
+    /* timestamp badges */
     ".nemo-ts {",
-    "  font-family: 'SF Mono','Fira Code','Consolas',monospace;",
-    "  color: #76b900; font-weight: 600;",
-    "  padding: 1px 5px; border-radius: 3px;",
-    "  background: rgba(118,185,0,.12); font-size: 12px;",
+    "  font-family:'SF Mono','Fira Code','Consolas',monospace;",
+    "  color:#76b900; font-weight:600;",
+    "  padding:1px 5px; border-radius:3px;",
+    "  background:rgba(118,185,0,.12); font-size:12px;",
     "}",
 
-    /* error */
-    ".nemo-err { color: #ef4444; }"
+    ".nemo-err { color:#ef4444 }",
+
+    ""
   ].join("\n");
   P.head.appendChild(css);
 
-  /* ═══════════════════════════════════════════════════════════════
-   *  Create elements
-   * ═══════════════════════════════════════════════════════════════ */
+  /* ═══════════════════════════════════════════════════════════════════
+   *  4.  Create DOM Elements
+   * ═══════════════════════════════════════════════════════════════════ */
 
-  /* ── Mic button ────────────────────────────────────────────── */
   var mic = P.createElement("button");
   mic.id = "nemo-mic";
-  mic.title = "Ask Nemo — tap to record a question";
+  mic.title = "Ask Nemo \u2014 tap to record a question";
   mic.innerHTML = [
     '<svg class="mic-icon" width="26" height="26" viewBox="0 0 24 24" fill="white">',
     '  <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>',
@@ -169,133 +168,138 @@
   ].join("");
   P.body.appendChild(mic);
 
-  /* ── Response panel ────────────────────────────────────────── */
   var panel = P.createElement("div");
   panel.id = "nemo-panel";
   panel.innerHTML = [
     '<div class="nemo-hdr">',
-    '  <div class="nemo-hdr-title"><span>⚡</span> Nemo</div>',
-    '  <button class="nemo-hdr-close" id="nemo-close">✕</button>',
+    '  <div class="nemo-hdr-title"><span>\u26A1</span> Nemo</div>',
+    '  <button class="nemo-hdr-close" id="nemo-close">\u2715</button>',
     "</div>",
     '<div class="nemo-body" id="nemo-body">',
     '  <div class="nemo-status">',
-    '    <div class="nemo-dot green"></div>Ready — tap the mic to ask a question',
+    '    <div class="nemo-dot green"></div>Ready \u2014 tap the mic to ask a question',
     "  </div>",
     "</div>"
   ].join("");
   P.body.appendChild(panel);
 
-  var body  = P.getElementById("nemo-body");
+  var body = P.getElementById("nemo-body");
   P.getElementById("nemo-close").addEventListener("click", function () {
     panel.classList.remove("visible");
   });
 
-  /* ═══════════════════════════════════════════════════════════════
-   *  Restore saved position
-   * ═══════════════════════════════════════════════════════════════ */
+  /* ═══════════════════════════════════════════════════════════════════
+   *  5.  State
+   * ═══════════════════════════════════════════════════════════════════ */
+
+  var recording  = false;
+  var recorder   = null;
+  var chunks     = [];
+  var lastRespId = "";
+
+  /* ═══════════════════════════════════════════════════════════════════
+   *  6.  Position Restore & Panel Positioning
+   * ═══════════════════════════════════════════════════════════════════ */
 
   try {
     var saved = JSON.parse(LS.getItem("nemo-pos"));
     if (saved && typeof saved.x === "number") {
-      mic.style.left   = saved.x + "px";
-      mic.style.top    = saved.y + "px";
-      mic.style.right  = "auto";
-      mic.style.bottom = "auto";
+      mic.style.left = saved.x + "px";
+      mic.style.top  = saved.y + "px";
+      mic.style.right = "auto"; mic.style.bottom = "auto";
     }
-  } catch (_) { /* ignore */ }
-
-  /* ═══════════════════════════════════════════════════════════════
-   *  Panel positioning (relative to mic)
-   * ═══════════════════════════════════════════════════════════════ */
+  } catch (_) {}
 
   function positionPanel() {
     var r  = mic.getBoundingClientRect();
-    var vw = WIN.innerWidth;
-    var vh = WIN.innerHeight;
-
-    /* horizontal — keep panel within viewport */
+    var vw = WIN.innerWidth, vh = WIN.innerHeight;
     panel.style.right = "auto";
     var panelLeft = r.left;
     if (panelLeft + 370 > vw) panelLeft = Math.max(8, vw - 378);
     if (panelLeft < 8) panelLeft = 8;
     panel.style.left = panelLeft + "px";
-
-    /* vertical — prefer above the mic; fall below if not enough room */
     if (r.top > 440) {
-      panel.style.top    = "auto";
+      panel.style.top = "auto";
       panel.style.bottom = (vh - r.top + 14) + "px";
     } else {
       panel.style.bottom = "auto";
-      panel.style.top    = (r.bottom + 14) + "px";
+      panel.style.top = (r.bottom + 14) + "px";
     }
   }
-
   positionPanel();
 
-  /* ═══════════════════════════════════════════════════════════════
-   *  Drag (pointer events — works for mouse & touch)
-   * ═══════════════════════════════════════════════════════════════ */
+  /* ═══════════════════════════════════════════════════════════════════
+   *  7.  Drag Logic  —  only activates on deliberate click + move
+   *
+   *  • pointerdown on the mic starts tracking.
+   *  • pointermove/pointerup listeners are on the *parent document*
+   *    so the pointer can leave the button while dragging.
+   *  • A 12 px dead-zone prevents accidental drags.
+   *  • If the pointer is released without exceeding the dead-zone
+   *    it counts as a normal tap (toggle recording).
+   * ═══════════════════════════════════════════════════════════════════ */
 
-  var drag = { sx: 0, sy: 0, ox: 0, oy: 0, moved: false };
+  var drag = { active: false, started: false, sx: 0, sy: 0, ox: 0, oy: 0 };
 
   mic.addEventListener("pointerdown", function (e) {
-    var r     = mic.getBoundingClientRect();
-    drag.sx   = e.clientX;
-    drag.sy   = e.clientY;
-    drag.ox   = e.clientX - r.left;
-    drag.oy   = e.clientY - r.top;
-    drag.moved = false;
-    mic.setPointerCapture(e.pointerId);
-    mic.style.transition = "box-shadow .2s ease, background .3s ease"; /* keep shadows, drop transform */
-    e.preventDefault();
+    if (e.button !== 0) return;          // primary button only
+    var r = mic.getBoundingClientRect();
+    drag.active  = true;
+    drag.started = false;
+    drag.sx = e.clientX;
+    drag.sy = e.clientY;
+    drag.ox = e.clientX - r.left;
+    drag.oy = e.clientY - r.top;
+    e.preventDefault();                   // prevent text-selection
   });
 
-  mic.addEventListener("pointermove", function (e) {
+  P.addEventListener("pointermove", function (e) {
+    if (!drag.active) return;
     var dx = Math.abs(e.clientX - drag.sx);
     var dy = Math.abs(e.clientY - drag.sy);
-    if (dx > 6 || dy > 6) drag.moved = true;
-    if (!drag.moved) return;
+
+    /* Enter drag mode only after exceeding the dead-zone */
+    if (!drag.started) {
+      if (dx > 12 || dy > 12) {
+        drag.started = true;
+        mic.classList.add("dragging");
+      } else {
+        return;                           // still inside dead-zone
+      }
+    }
 
     var x = Math.max(0, Math.min(e.clientX - drag.ox, WIN.innerWidth  - 64));
     var y = Math.max(0, Math.min(e.clientY - drag.oy, WIN.innerHeight - 64));
-
-    mic.style.left   = x + "px";
-    mic.style.top    = y + "px";
+    mic.style.left = x + "px";
+    mic.style.top  = y + "px";
     mic.style.right  = "auto";
     mic.style.bottom = "auto";
-
     positionPanel();
   });
 
-  mic.addEventListener("pointerup", function () {
-    mic.style.transition = ""; /* restore all transitions */
-    if (!drag.moved) {
+  P.addEventListener("pointerup", function (e) {
+    if (!drag.active) return;
+    drag.active = false;
+    mic.classList.remove("dragging");
+
+    if (!drag.started) {
+      /* It was a tap — toggle recording */
       toggleRecording();
     } else {
-      /* persist position */
+      /* It was a drag — save new position */
       try {
         var r = mic.getBoundingClientRect();
         LS.setItem("nemo-pos", JSON.stringify({ x: r.left, y: r.top }));
-      } catch (_) { /* ignore */ }
+      } catch (_) {}
     }
-    drag.moved = false;
   });
 
-  /* ═══════════════════════════════════════════════════════════════
-   *  Audio recording
-   * ═══════════════════════════════════════════════════════════════ */
-
-  var recording = false;
-  var recorder  = null;
-  var chunks    = [];
+  /* ═══════════════════════════════════════════════════════════════════
+   *  8.  Audio Recording  (tap to record / tap to stop)
+   * ═══════════════════════════════════════════════════════════════════ */
 
   function bestMime() {
-    var types = [
-      "audio/webm;codecs=opus",
-      "audio/webm",
-      "audio/ogg;codecs=opus",
-      "audio/ogg"
-    ];
+    var types = ["audio/webm;codecs=opus","audio/webm","audio/ogg;codecs=opus","audio/ogg"];
     for (var i = 0; i < types.length; i++) {
       if (MediaRecorder.isTypeSupported(types[i])) return types[i];
     }
@@ -304,20 +308,14 @@
 
   async function toggleRecording() {
     if (recording) {
-      /* ── Stop ─────────────────────────────────────────────── */
       if (recorder && recorder.state === "recording") recorder.stop();
       recording = false;
       mic.classList.remove("recording");
     } else {
-      /* ── Start ────────────────────────────────────────────── */
       try {
-        /* Try iframe context first; fallback to parent navigator */
         var stream;
-        try {
-          stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        } catch (_) {
-          stream = await WIN.navigator.mediaDevices.getUserMedia({ audio: true });
-        }
+        try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+        catch (_) { stream = await WIN.navigator.mediaDevices.getUserMedia({ audio: true }); }
 
         chunks = [];
         var mime = bestMime();
@@ -350,20 +348,24 @@
     }
   }
 
-  /* ═══════════════════════════════════════════════════════════════
-   *  Panel state updates
-   * ═══════════════════════════════════════════════════════════════ */
+  /* ═══════════════════════════════════════════════════════════════════
+   *  9.  Panel Display
+   * ═══════════════════════════════════════════════════════════════════ */
 
   function showPanel(mode, data) {
     positionPanel();
+
     if (mode === "listening") {
       body.innerHTML =
         '<div class="nemo-status"><div class="nemo-dot red"></div>Listening\u2026 tap the mic to stop</div>';
+
     } else if (mode === "processing") {
       body.innerHTML =
         '<div class="nemo-status"><div class="nemo-dot green"></div>Nemo is thinking\u2026</div>';
+
     } else if (mode === "error") {
       body.innerHTML = '<div class="nemo-err">' + (data || "An error occurred.") + "</div>";
+
     } else if (mode === "response") {
       var q = escapeHtml(data.question);
       var a = (data.answer || "").replace(
@@ -377,18 +379,25 @@
         '<div class="nemo-answer">' + a + "</div>"
       ].join("");
     }
+
     panel.classList.add("visible");
   }
 
   function escapeHtml(t) {
-    var d = P.createElement("span");
-    d.textContent = t;
-    return d.innerHTML;
+    var d = P.createElement("span"); d.textContent = t; return d.innerHTML;
   }
 
-  /* ═══════════════════════════════════════════════════════════════
-   *  TTS — Web Speech API (same approach as tts_component.py)
-   * ═══════════════════════════════════════════════════════════════ */
+  /* ═══════════════════════════════════════════════════════════════════
+   *  10.  TTS — scored voice selection for the most natural voice
+   *
+   *  Priority (highest → lowest):
+   *    • Edge / Chrome "Natural" neural voices  (e.g. "Microsoft Aria Online (Natural)")
+   *    • macOS "Premium" / "Enhanced" voices     (e.g. "Samantha (Enhanced)")
+   *    • Chrome "Google UK English Female"       (widely available, sounds good)
+   *    • Any voice with "Google" in the name
+   *    • macOS "Samantha" (standard)
+   *    • Any English local voice                 (last resort)
+   * ═══════════════════════════════════════════════════════════════════ */
 
   function speak(text) {
     var synth = WIN.speechSynthesis;
@@ -396,38 +405,64 @@
     synth.cancel();
 
     var utt = new SpeechSynthesisUtterance(text);
-    utt.rate  = 1.0;
+    utt.rate  = 0.95;   /* slightly slower → more natural cadence */
     utt.pitch = 1.0;
+
+    function scoreVoice(v) {
+      var n = v.name.toLowerCase();
+      var l = (v.lang || "").toLowerCase();
+
+      /* Must be English */
+      if (l.indexOf("en") !== 0) return -1;
+
+      var s = 0;
+
+      /* Neural / Natural voices (Edge, newer Chrome) */
+      if (n.indexOf("natural") >= 0)                    s += 100;
+
+      /* macOS Enhanced / Premium voices */
+      if (n.indexOf("enhanced") >= 0)                   s += 90;
+      if (n.indexOf("premium") >= 0)                    s += 90;
+
+      /* Edge online neural voices that don't say "Natural" */
+      if (n.indexOf("online") >= 0)                     s += 80;
+      if (n.indexOf("neural") >= 0)                     s += 80;
+
+      /* Chrome's best free voice */
+      if (n === "google uk english female")              s += 70;
+      if (n === "google us english")                     s += 60;
+      if (n.indexOf("google") >= 0 && s < 60)           s += 50;
+
+      /* macOS Samantha (standard) — decent fallback */
+      if (n.indexOf("samantha") >= 0 && s < 50)         s += 40;
+
+      /* Prefer female voices (generally clearer for spoken answers) */
+      if (n.indexOf("female") >= 0)                     s += 5;
+
+      /* Any English local voice as last resort */
+      if (s === 0 && v.localService)                     s += 1;
+
+      return s;
+    }
 
     function doSpeak() {
       var voices = synth.getVoices();
+      var best = null, bestScore = -1;
       for (var i = 0; i < voices.length; i++) {
-        var v = voices[i];
-        if (
-          v.name.indexOf("Samantha") >= 0 ||
-          v.name.indexOf("Google US English") >= 0 ||
-          v.name.indexOf("Natural") >= 0 ||
-          (v.lang.indexOf("en") === 0 && v.localService)
-        ) {
-          utt.voice = v;
-          break;
-        }
+        var sc = scoreVoice(voices[i]);
+        if (sc > bestScore) { bestScore = sc; best = voices[i]; }
       }
+      if (best) utt.voice = best;
       synth.speak(utt);
     }
 
-    if (synth.getVoices().length > 0) {
-      doSpeak();
-    } else {
-      synth.onvoiceschanged = doSpeak;
-    }
+    if (synth.getVoices().length > 0) doSpeak();
+    else synth.onvoiceschanged = doSpeak;
   }
 
-  /* ═══════════════════════════════════════════════════════════════
-   *  Receive render events from Streamlit (Python → JS)
-   * ═══════════════════════════════════════════════════════════════ */
-
-  var lastRespId = "";
+  /* ═══════════════════════════════════════════════════════════════════
+   *  11.  Handle Render Events from Streamlit  (Python → JS)
+   * ═══════════════════════════════════════════════════════════════════ */
 
   window.addEventListener("message", function (event) {
     if (!event.data || event.data.type !== "streamlit:render") return;
@@ -436,13 +471,36 @@
     if (args.response && args.question) {
       showPanel("response", { question: args.question, answer: args.response });
 
-      /* Speak only when the response is new */
       if (args._response_id && args._response_id !== lastRespId) {
         lastRespId = args._response_id;
         speak(args.response);
       }
     }
   });
+
+  /* ═══════════════════════════════════════════════════════════════════
+   *  12.  Fullscreen Support
+   *
+   *  When the video (or any element) goes fullscreen, the browser
+   *  only renders that element and its children.  We move the mic
+   *  and panel into the fullscreen element so they stay visible,
+   *  then move them back to <body> when fullscreen exits.
+   * ═══════════════════════════════════════════════════════════════════ */
+
+  function onFullscreenChange() {
+    var fsEl = P.fullscreenElement || P.webkitFullscreenElement || P.msFullscreenElement;
+    if (fsEl) {
+      fsEl.appendChild(mic);
+      fsEl.appendChild(panel);
+    } else {
+      P.body.appendChild(mic);
+      P.body.appendChild(panel);
+    }
+    positionPanel();
+  }
+
+  P.addEventListener("fullscreenchange", onFullscreenChange);
+  P.addEventListener("webkitfullscreenchange", onFullscreenChange);
 
 })();
 </script>
